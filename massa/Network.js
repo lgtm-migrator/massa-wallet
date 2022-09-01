@@ -2,88 +2,100 @@ const NETWORK_LOCAL = 0;
 const NETWORK_LABNET = 1;
 const NETWORK_TESTNET = 2;
 const NETWORK_MAINNET = 3;
-const NETWORK_INNONET = 4;
+const NETWORK_INNONET_12 = 4;
+const NETWORK_INNONET_13 = 5;
 
-const NETWORK_ADDRESS = ['http://localhost:33035', 'https://labnet.massa.net/api/v2', 'https://test.massa.net/api/v2', 'https://massa.net/api/v2', 'http://37.187.156.118/test12'];
+const NETWORK_ADDRESS = [
+	'http://localhost:33035',
+	'https://labnet.massa.net/api/v2',
+	'https://test.massa.net/api/v2',
+	'https://massa.net/api/v2',
+	'http://37.187.156.118/test12',
+	'http://37.187.156.118/test13',
+];
 
-
-const MASSA_DNS = "A12o8tw83tDrA52Lju9BUDDodAhtUp4scHtYr8Fj4iwhDTuWZqHZ";
-const MASSA_WEB = "2qbtmxh5pD3TH3McFmZWxvKLTyz2SKDYFSRL8ngQBJ4R6f3Duw";
-
+const MASSA_DNS = 'A12o8tw83tDrA52Lju9BUDDodAhtUp4scHtYr8Fj4iwhDTuWZqHZ';
+const MASSA_WEB = '2qbtmxh5pD3TH3McFmZWxvKLTyz2SKDYFSRL8ngQBJ4R6f3Duw';
 
 class Network {
-    constructor() {
-        this.currentNetwork = NETWORK_TESTNET;
-        this.networkAddress = NETWORK_ADDRESS[this.currentNetwork];
+	constructor() {
+		this.currentNetwork = NETWORK_TESTNET;
+		this.networkAddress = NETWORK_ADDRESS[this.currentNetwork];
 
-        this.web3Client = massa.ClientFactory.createDefaultClient(this.networkAddress);
-    }
+		this.web3Client = massa.ClientFactory.createDefaultClient(this.networkAddress);
+	}
 
-    setDefaultNetwork() {
-        this.setNetwork(NETWORK_LABNET);
-    }
+	setDefaultNetwork() {
+		this.setNetwork(NETWORK_LABNET);
+	}
 
-    setNetwork(network) {
-        this.currentNetwork = network;
-        this.networkAddress = NETWORK_ADDRESS[this.currentNetwork];
-        this.web3Client.setNewDefaultProvider(this.networkAddress);
-    }
+	setNetwork(network) {
+		this.currentNetwork = network;
+		this.networkAddress = NETWORK_ADDRESS[this.currentNetwork];
+		this.web3Client.setNewDefaultProvider(this.networkAddress);
+	}
 
-    async getBalances(addresses) {
-        if (addresses.length == 0)
-            return [];
+	async getBalances(addresses) {
+		if (addresses.length == 0) return [];
 
-        const resJson = await this.web3Client.publicApi().getAddresses(addresses);
-        let res = [];
-        for (let i = 0; i < resJson.length; i++) {
-            let address = resJson[i].address;
-            let balance = resJson[i].ledger_info.final_ledger_info.balance;
-            let candidateBalance = resJson[i].ledger_info.candidate_ledger_info.balance;
-            res.push({ address, balance, candidateBalance });
-        }
-        return res;
-    }
+		const resJson = await this.web3Client.publicApi().getAddresses(addresses);
+		let res = [];
+		for (let i = 0; i < resJson.length; i++) {
+			let address = resJson[i].address;
+			let balance = resJson[i].ledger_info.final_ledger_info.balance;
+			let candidateBalance = resJson[i].ledger_info.candidate_ledger_info.balance;
+			res.push({ address, balance, candidateBalance });
+		}
+		return res;
+	}
 
-    async getLatestPeriod() {
-        const res = await this.web3Client.publicApi().getNodeStatus();
-        return res.last_slot.period;
-    }
+	async getLatestPeriod() {
+		const res = await this.web3Client.publicApi().getNodeStatus();
+		return res.last_slot.period;
+	}
 
+	async getZipFile(site) {
+		//Get site address
+		let site_encoded = xbqcrypto.base58check_encode(xbqcrypto.hash_blake3('record' + site));
+		let json_response = await this.web3Client.publicApi().getAddresses([MASSA_DNS]);
 
-    async getZipFile(site) {
-        //Get site address
-        let site_encoded = xbqcrypto.base58check_encode(xbqcrypto.hash_blake3('record' + site));
-        let json_response = await this.web3Client.publicApi().getAddresses([MASSA_DNS]);
+		//console.log(json_response);
+		//console.log(json_response[0]['final_sce_ledger_info']['datastore'][site_encoded]);
+		//console.log(json_response[0]['candidate_sce_ledger_info']['datastore']);
 
-        //console.log(json_response);
-        //console.log(json_response[0]['final_sce_ledger_info']['datastore'][site_encoded]);
-        //console.log(json_response[0]['candidate_sce_ledger_info']['datastore']);
+		let site_address = String.fromCharCode(
+			...json_response[0]['candidate_sce_ledger_info']['datastore'][site_encoded]
+		);
 
-        let site_address = String.fromCharCode(...json_response[0]['candidate_sce_ledger_info']['datastore'][site_encoded]);
+		//Get zip
+		json_response = await this.web3Client.publicApi().getAddresses([site_address]);
 
-        //Get zip
-        json_response = await this.web3Client.publicApi().getAddresses([site_address]);
+		//console.log(json_response[0]['candidate_sce_ledger_info']['datastore']);
 
-        //console.log(json_response[0]['candidate_sce_ledger_info']['datastore']);
+		var zip_base64 = '';
+		for (
+			var i = 0;
+			i < json_response[0]['candidate_sce_ledger_info']['datastore'][MASSA_WEB].length;
+			++i
+		) {
+			zip_base64 += String.fromCharCode(
+				json_response[0]['candidate_sce_ledger_info']['datastore'][MASSA_WEB][i]
+			);
+		}
 
-        var zip_base64 = "";
-        for (var i = 0; i < json_response[0]['candidate_sce_ledger_info']['datastore'][MASSA_WEB].length; ++i) {
-            zip_base64 += (String.fromCharCode(json_response[0]['candidate_sce_ledger_info']['datastore'][MASSA_WEB][i]));
-        }
+		return zip_base64;
+	}
 
-        return zip_base64;
-    }
-
-    //Wrapped functions (usable by any DAPP)
-    async getAddresses(params) {
-        return await this.web3Client.publicApi().getAddresses(params);
-    }
-    async getBlocks(params) {
-        return await this.web3Client.publicApi().getBlocks(params);
-    }
-    async getOperations(params) {
-        return await this.web3Client.publicApi().getOperations(params);
-    }
+	//Wrapped functions (usable by any DAPP)
+	async getAddresses(params) {
+		return await this.web3Client.publicApi().getAddresses(params);
+	}
+	async getBlocks(params) {
+		return await this.web3Client.publicApi().getBlocks(params);
+	}
+	async getOperations(params) {
+		return await this.web3Client.publicApi().getOperations(params);
+	}
 }
 
 export default Network;
